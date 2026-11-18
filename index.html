@@ -1271,8 +1271,8 @@ form.f{grid-template-columns:1fr}
 <label class="fld">Nombre<input name="name" autocomplete="given-name" required maxlength="40"></label>
 <label class="fld">Apellido<input name="surname" autocomplete="family-name" required maxlength="40"></label>
 <label class="fld full">Celular<input name="phone" type="tel" inputmode="numeric" autocomplete="tel-national" placeholder="3001234567" required maxlength="10"></label>
-<label class="fld">Departamento<input name="state" list="deps" required maxlength="40"></label>
-<label class="fld">Ciudad<input name="city" autocomplete="address-level2" required maxlength="60"></label>
+<label class="fld">Departamento<select name="state" id="dep" required><option value="">Elige…</option></select></label>
+<label class="fld">Ciudad<select name="city" id="city" required disabled><option value="">Primero el departamento</option></select></label>
 <label class="fld full">Dirección y barrio<input name="dir" autocomplete="street-address" required maxlength="120"></label>
 <label class="hp" aria-hidden="true">No llenar<input name="website" tabindex="-1" autocomplete="off"></label>
 <label class="fld full" style="flex-direction:row;align-items:flex-start;gap:8px"><input type="checkbox" name="ok" required style="min-height:20px;width:20px;margin-top:2px"><span>Acepto los <a href="legal.html#terminos" style="text-decoration:underline">términos</a> y el tratamiento de mis datos para gestionar este pedido.</span></label>
@@ -1281,11 +1281,10 @@ form.f{grid-template-columns:1fr}
 </form>
 </div>
 </dialog>
-<datalist id="deps"><option value="Amazonas"><option value="Antioquia"><option value="Arauca"><option value="Atlántico"><option value="Bogotá D.C."><option value="Bolívar"><option value="Boyacá"><option value="Caldas"><option value="Caquetá"><option value="Casanare"><option value="Cauca"><option value="Cesar"><option value="Chocó"><option value="Córdoba"><option value="Cundinamarca"><option value="Guainía"><option value="Guaviare"><option value="Huila"><option value="La Guajira"><option value="Magdalena"><option value="Meta"><option value="Nariño"><option value="Norte de Santander"><option value="Putumayo"><option value="Quindío"><option value="Risaralda"><option value="San Andrés y Providencia"><option value="Santander"><option value="Sucre"><option value="Tolima"><option value="Valle del Cauca"><option value="Vaupés"><option value="Vichada"></datalist>
 
 <script>
 /* Conexión con Dropi: pega aquí las direcciones de tu función cuando esté publicada. */
-var CONFIG={orderEndpoint:'',stockEndpoint:''};
+var CONFIG={orderEndpoint:'/api/pedido',stockEndpoint:'/api/inventario',citiesUrl:'/ciudades.json'};
 (function(){
 var $=function(s,r){return (r||document).querySelector(s)},$$=function(s,r){return [].slice.call((r||document).querySelectorAll(s))};
 var cards=$$('.card'),filt='all',q='';
@@ -1305,7 +1304,10 @@ $('#grid').addEventListener('click',function(e){var b=e.target.closest('.buy');i
 $('#sName').textContent=c.dataset.name;$('#sPrice').textContent=money(c.dataset.price);var im=$('img',c);$('#sImg').src=im.currentSrc||im.src;$('#sImg').alt=im.alt;
 var cols=JSON.parse(c.dataset.colors||'[]'),sel=$('#color');sel.innerHTML='';cols.forEach(function(x){var o=document.createElement('option');o.value=x[0];o.textContent=x[1];sel.appendChild(o)});$('#colorWrap').hidden=!cols.length;
 msg.hidden=true;$('#send').disabled=false;form.hidden=false;t0=Date.now();
-if(dlg.showModal)dlg.showModal();else dlg.setAttribute('open','')});
+loadCities();if(dlg.showModal)dlg.showModal();else dlg.setAttribute('open','')});
+var CITIES=null,dep=$('#dep'),city=$('#city');
+function loadCities(){if(CITIES)return;CITIES={};fetch(CONFIG.citiesUrl).then(function(r){return r.json()}).then(function(d){CITIES=d.c;d.d.forEach(function(x){var o=document.createElement('option');o.value=x[0];o.textContent=x[1];dep.appendChild(o)})}).catch(function(){CITIES=null})}
+dep.addEventListener('change',function(){city.innerHTML='';var l=(CITIES&&CITIES[dep.value])||[];var o=document.createElement('option');o.value='';o.textContent=l.length?'Elige tu ciudad…':'Primero el departamento';city.appendChild(o);l.forEach(function(c){var o=document.createElement('option');o.value=c;o.textContent=c;city.appendChild(o)});city.disabled=!l.length});
 $('#dlgx').addEventListener('click',function(){dlg.close()});
 dlg.addEventListener('click',function(e){if(e.target===dlg)dlg.close()});
 form.addEventListener('submit',function(e){e.preventDefault();var d=new FormData(form),v=function(k){return String(d.get(k)||'').trim()};
@@ -1317,7 +1319,7 @@ if(Date.now()-t0<3000)return say('Revisa tus datos y vuelve a confirmar.','err')
 var body={product_id:+cur.dataset.id,variation_id:v('variation_id')?+v('variation_id'):null,price:+cur.dataset.price,quantity:1,name:v('name'),surname:v('surname'),phone:v('phone'),state:v('state'),city:v('city'),dir:v('dir'),rate_type:'CON RECAUDO'};
 if(!CONFIG.orderEndpoint)return say('Vista previa: la conexión con Dropi todavía no está activa, así que este pedido no se envió.','err');
 $('#send').disabled=true;say('Enviando tu pedido…');
-fetch(CONFIG.orderEndpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(function(r){return r.json().then(function(j){return{ok:r.ok,j:j}})}).then(function(x){if(!x.ok)throw new Error(x.j&&x.j.message||'');form.reset();say('¡Listo! Tu pedido quedó registrado. Te llega a la dirección que nos diste y pagas al recibir.','ok')}).catch(function(err){$('#send').disabled=false;say(err.message||'No pudimos registrar el pedido. Intenta de nuevo en un momento.','err')})});
+body.website=v('website');fetch(CONFIG.orderEndpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(function(r){return r.json().catch(function(){return{}}).then(function(j){return{ok:r.ok,status:r.status,j:j}})}).then(function(x){if(!x.ok){if(x.status===429)throw new Error('Hiciste varios intentos seguidos. Espera un minuto y vuelve a intentar.');throw new Error(x.j&&x.j.message||'')}form.reset();city.disabled=true;say(x.j.message||'¡Listo! Tu pedido quedó registrado. Pagas al recibir.','ok');if(window.fbq)fbq('track','Purchase',{value:+cur.dataset.price,currency:'COP'})}).catch(function(err){$('#send').disabled=false;say(err.message||'No pudimos registrar el pedido. Intenta de nuevo en un momento.','err')})});
 /* inventario en vivo desde Dropi */
 if(CONFIG.stockEndpoint){fetch(CONFIG.stockEndpoint).then(function(r){return r.json()}).then(function(s){cards.forEach(function(c){var p=s[c.dataset.id];if(!p)return;var cols=JSON.parse(c.dataset.colors||'[]');if(cols.length){cols=cols.filter(function(x){return p.variations&&p.variations[x[0]]>0});c.dataset.colors=JSON.stringify(cols);if(!cols.length)c.dataset.out=1}else if(!(p.stock>0))c.dataset.out=1});apply()}).catch(function(){})}
 })();
